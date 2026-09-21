@@ -1,0 +1,40 @@
+replicaCount: 1
+
+image:
+  repository: 795250896452.dkr.ecr.us-east-1.amazonaws.com/sa-demo/atlas-invoice-analyzer
+  tag: latest
+  pullPolicy: Always
+
+services:
+  - name: http
+    ingress: true
+    probes: true
+    port: 80
+    targetPort: 8080
+    type: ClusterIP
+
+ingress:
+  enabled: true
+  hosts:
+    - atlas-invoice-analyzer.sa-demo.staging.corp.mongodb.com
+
+probes:
+  enabled: true
+  path: /
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+security:
+  dataClassification: "Internal"
+
+ownership:
+  driEmail: nitin.mukheja@mongodb.com
+
+env: {}
+envSecrets: {}
