@@ -162,6 +162,7 @@
     cursor: pointer; font-weight: 500;
   }
   .btn:hover { border-color: var(--ink); }
+  .btn.active { background: var(--green-tint); border-color: var(--green); color: var(--green); }
   .btn.primary { background: var(--green); border-color: var(--green); color: #fff; }
   .btn.primary:hover { background: var(--green-deep); }
   .btn.ghost { border-color: transparent; color: var(--ink-soft); }
@@ -435,6 +436,7 @@
   var FILTER_FIELDS = ["Project","SKU","Cluster","Region","Cloud Provider","Application"];
 
   var activeFilters = {};   // field -> Set(display-string) ; presence of key = filter active (empty set = matches nothing)
+  var activeContainsFilters = {}; // field -> lowercase substring match
   var searchTerm = "";
   var dateStart = null, dateEnd = null; // Date (usage date range)
   var groupField = "Project";
@@ -521,7 +523,7 @@
       RAW_ROWS = allRows;
       COLUMNS = ordered;
       FILES_META = filesMeta;
-      activeFilters = {}; searchTerm = ''; dateStart = null; dateEnd = null;
+      activeFilters = {}; activeContainsFilters = {}; searchTerm = ''; dateStart = null; dateEnd = null;
       document.getElementById('startDateFilter') && (document.getElementById('startDateFilter').value = '');
       document.getElementById('endDateFilter') && (document.getElementById('endDateFilter').value = '');
       page = 0;
@@ -760,6 +762,7 @@
 
     document.getElementById('clearFilters').onclick = function(){
       activeFilters = {};
+      activeContainsFilters = {};
       searchTerm = '';
       dateStart = null; dateEnd = null;
       grid.querySelectorAll('select').forEach(function(s){ s.value=''; });
@@ -796,6 +799,10 @@
         if (excludingOwnFilter && f === field) continue;
         if (!matchesFilterField(r, f)) return;
       }
+      for (var containsField in activeContainsFilters){
+        if (excludingOwnFilter && containsField === field) continue;
+        if (!matchesFilterField(r, containsField)) return;
+      }
       if (dateStart || dateEnd){ if (!inDateRange(r)) return; }
       if (searchTerm && !matchesSearch(r)) return;
       var v = fieldValue(r, field);
@@ -816,7 +823,8 @@
     panel.style.left = left + 'px'; panel.style.top = top + 'px';
 
     var h = document.createElement('h4'); h.textContent = 'Filter: ' + field; panel.appendChild(h);
-    var search = document.createElement('input'); search.type='text'; search.className='search-input'; search.placeholder='Search values…';
+    var search = document.createElement('input'); search.type='text'; search.className='search-input'; search.placeholder='Search values or enter text for contains';
+    search.value = activeContainsFilters[field] || '';
     panel.appendChild(search);
 
     var sortBar = document.createElement('div'); sortBar.className='sort-actions';
@@ -827,7 +835,9 @@
     var actionsBar = document.createElement('div'); actionsBar.className='actions-bar';
     var selectAllBtn = document.createElement('button'); selectAllBtn.className='btn sm ghost'; selectAllBtn.textContent='Select all';
     var clearAllBtn = document.createElement('button'); clearAllBtn.className='btn sm ghost'; clearAllBtn.textContent='Clear';
+    var presentBtn = document.createElement('button'); presentBtn.className='btn sm ghost'; presentBtn.textContent='Show only present';
     actionsBar.appendChild(selectAllBtn); actionsBar.appendChild(clearAllBtn); panel.appendChild(actionsBar);
+    actionsBar.appendChild(presentBtn);
 
     var valuesWrap = document.createElement('div'); valuesWrap.className='values-list'; panel.appendChild(valuesWrap);
 
@@ -839,11 +849,14 @@
     items.forEach(function(v){ checkedState[v] = spec ? spec.has(v) : true; });
 
     var currentSort = 'az';
+    var showOnlyPresent = false;
+    var selectionTouched = false;
     function renderList(filterText){
       valuesWrap.innerHTML = '';
       var q = (filterText||'').trim().toLowerCase();
       var arr = items.slice();
       if (q) arr = arr.filter(function(v){ return v.toLowerCase().indexOf(q) !== -1; });
+      if (showOnlyPresent) arr = arr.filter(function(v){ return (counts[v] || 0) > 0; });
       arr.sort(function(a,b){ return currentSort==='az' ? a.localeCompare(b) : b.localeCompare(a); });
       arr.forEach(function(v){
         var row = document.createElement('div'); row.className='value-row';
@@ -851,7 +864,7 @@
         var lbl = document.createElement('div'); lbl.className='value-label'; lbl.textContent = v; lbl.title = v;
         var cnt = document.createElement('div'); cnt.className='value-count'; cnt.textContent = counts[v]||0;
         row.appendChild(cb); row.appendChild(lbl); row.appendChild(cnt);
-        cb.addEventListener('change', function(){ checkedState[v] = cb.checked; });
+        cb.addEventListener('change', function(){ selectionTouched = true; checkedState[v] = cb.checked; });
         valuesWrap.appendChild(row);
       });
     }
@@ -859,6 +872,7 @@
     search.addEventListener('input', function(){ renderList(search.value); });
     sortAZ.addEventListener('click', function(){ currentSort='az'; renderList(search.value); });
     sortZA.addEventListener('click', function(){ currentSort='za'; renderList(search.value); });
+    presentBtn.addEventListener('click', function(){ showOnlyPresent = !showOnlyPresent; presentBtn.classList.toggle('active', showOnlyPresent); renderList(search.value); });
     selectAllBtn.addEventListener('click', function(){ items.forEach(function(v){checkedState[v]=true;}); renderList(search.value); });
     clearAllBtn.addEventListener('click', function(){ items.forEach(function(v){checkedState[v]=false;}); renderList(search.value); });
 
@@ -868,7 +882,18 @@
     bottom.appendChild(cancel); bottom.appendChild(apply); panel.appendChild(bottom);
     cancel.addEventListener('click', hidePanel);
     apply.addEventListener('click', function(){
+      var containsText = search.value.trim().toLowerCase();
+      if (containsText && !selectionTouched) {
+        delete activeFilters[field];
+        activeContainsFilters[field] = containsText;
+        log('Column filter on "' + field + '" contains "' + containsText + '"');
+        hidePanel();
+        page = 0;
+        render();
+        return;
+      }
       var chosen = Object.keys(checkedState).filter(function(k){ return checkedState[k]; });
+      delete activeContainsFilters[field];
       if (chosen.length === items.length) delete activeFilters[field];
       else activeFilters[field] = new Set(chosen);
       log('Column filter on "' + field + '" \u2192 ' + (activeFilters[field] ? chosen.length + ' value(s) selected' : 'all'));
@@ -880,6 +905,7 @@
 
   // ================= Filtering engine =================
   function matchesFilterField(row, field){
+    if (activeContainsFilters[field]) return fieldValue(row, field).toLowerCase().indexOf(activeContainsFilters[field]) !== -1;
     var spec = activeFilters[field];
     if (!spec) return true;
     var v = fieldValue(row, field);
@@ -1018,7 +1044,7 @@
   // ---- th() builder shared by raw + grouped tables; adds sort + optional column-filter button ----
   function th(key, label, isNum, filterField){
     var arrow = sortCol===key ? (sortDir===1?'\u2191':'\u2193') : '';
-    var filterBtn = filterField ? '<button class="th-filter-btn' + (activeFilters[filterField] ? ' active' : '') + '" data-filter-field="' + esc(filterField) + '" title="Filter ' + esc(filterField) + '">\u25BE</button>' : '';
+    var filterBtn = filterField ? '<button class="th-filter-btn' + (activeFilters[filterField] || activeContainsFilters[filterField] ? ' active' : '') + '" data-filter-field="' + esc(filterField) + '" title="Filter ' + esc(filterField) + '">\u25BE</button>' : '';
     return '<th class="'+(isNum?'num':'')+'" data-key="'+esc(key)+'"><span class="th-inner"><span class="sort-label">'+esc(label)+'</span> <span class="arrow">'+arrow+'</span></span>'+filterBtn+'</th>';
   }
   function attachSort(){
