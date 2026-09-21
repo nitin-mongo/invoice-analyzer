@@ -178,6 +178,17 @@
   .chip.active { background: var(--ink); border-color: var(--ink); color: var(--paper); font-weight: 500; }
 
   table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  #resultTable { table-layout: fixed; }
+  #resultTable th:nth-child(1), #resultTable td:nth-child(1),
+  #resultTable th:nth-child(2), #resultTable td:nth-child(2) { width: 7%; }
+  #resultTable th:nth-child(3), #resultTable td:nth-child(3) { width: 22%; }
+  #resultTable th:nth-child(4), #resultTable td:nth-child(4),
+  #resultTable th:nth-child(5), #resultTable td:nth-child(5),
+  #resultTable th:nth-child(7), #resultTable td:nth-child(7) { width: 13%; }
+  #resultTable th:nth-child(6), #resultTable td:nth-child(6) { width: 8%; }
+  #resultTable th:nth-child(8), #resultTable td:nth-child(8) { width: 7%; }
+  #resultTable th:nth-child(9), #resultTable td:nth-child(9),
+  #resultTable th:nth-child(10), #resultTable td:nth-child(10) { width: 6%; }
   thead th {
     text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .4px;
     color: var(--ink-faint); font-weight: 600; padding: 9px 12px; border-bottom: 1px solid var(--rule-strong);
@@ -197,6 +208,8 @@
   tbody tr:hover { background: var(--green-tint); }
   td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
   td.name { max-width: 340px; }
+  #resultTable th, #resultTable td { overflow: hidden; text-overflow: ellipsis; }
+  #resultTable tbody td { white-space: nowrap; }
   .bar-track { position: relative; }
   .bar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--green); opacity: .14; }
   .bar-cell { position: relative; }
@@ -436,6 +449,7 @@
     'Project','Project ID','SKU','Region','Cluster','Replica Set','Config Server','Application',
     'Unit','Unit Price','Quantity','Discount Percent','Amount','Cloud Provider'];
   var FILTER_FIELDS = ["Project","SKU","Cluster","Region","Cloud Provider","Application"];
+  var PREVIEW_COLUMNS = ["Date","Usage Date","Description","Project","SKU","Region","Cluster","Unit Price","Quantity","Amount"];
 
   var activeFilters = {};   // field -> Set(display-string) ; presence of key = filter active (empty set = matches nothing)
   var activeContainsFilters = {}; // field -> lowercase substring match
@@ -1067,7 +1081,7 @@
 
   function renderRawTable(filtered){
     renderTrendChart(null);
-    var cols = COLUMNS.slice();
+    var cols = PREVIEW_COLUMNS.filter(function(c){ return COLUMNS.indexOf(c) !== -1; });
     filtered = filtered.slice().sort(function(a,b){
       var av = sortCol==='amount' ? a.__amount : sortCol==='Quantity' ? a.__qty : (a[sortCol]||'');
       var bv = sortCol==='amount' ? b.__amount : sortCol==='Quantity' ? b.__qty : (b[sortCol]||'');
