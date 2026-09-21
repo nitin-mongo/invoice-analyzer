@@ -1,0 +1,1458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Atlas Invoice Analyzer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --paper: #F7F4EC;
+    --paper-raised: #FFFFFF;
+    --ink: #1E2320;
+    --ink-soft: #565F58;
+    --ink-faint: #8A9188;
+    --rule: #D8D2C0;
+    --rule-strong: #B9B192;
+    --green: #0C5B41;
+    --green-deep: #073E2B;
+    --green-tint: #E5EFE8;
+    --red: #8C2F1B;
+    --red-tint: #F3E6E1;
+    --amber: #8A6116;
+    --amber-tint: #F5EBD3;
+    --focus: #0C5B41;
+    --radius: 3px;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --paper: #141815;
+      --paper-raised: #1B211D;
+      --ink: #EAE8DF;
+      --ink-soft: #A9AFA5;
+      --ink-faint: #767D73;
+      --rule: #333A34;
+      --rule-strong: #454D46;
+      --green: #4FAE86;
+      --green-deep: #7BC9A6;
+      --green-tint: #17251D;
+      --red: #D98166;
+      --red-tint: #2A1B15;
+      --amber: #D9B25E;
+      --amber-tint: #2A2313;
+      --focus: #4FAE86;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #141815;
+    --paper-raised: #1B211D;
+    --ink: #EAE8DF;
+    --ink-soft: #A9AFA5;
+    --ink-faint: #767D73;
+    --rule: #333A34;
+    --rule-strong: #454D46;
+    --green: #4FAE86;
+    --green-deep: #7BC9A6;
+    --green-tint: #17251D;
+    --red: #D98166;
+    --red-tint: #2A1B15;
+    --amber: #D9B25E;
+    --amber-tint: #2A2313;
+    --focus: #4FAE86;
+  }
+  html, body { height: 100%; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 36px 24px 80px; }
+
+  h1, h2, h3, h4 { font-family: 'Source Serif 4', Georgia, serif; font-weight: 600; margin: 0; }
+  .masthead {
+    display: flex; justify-content: space-between; align-items: flex-end;
+    border-bottom: 2px solid var(--ink); padding-bottom: 16px; margin-bottom: 4px;
+    flex-wrap: wrap; gap: 12px;
+  }
+  .masthead h1 { font-size: 28px; letter-spacing: 0.2px; }
+  .masthead .kicker { color: var(--green); font-size: 12px; margin-bottom: 6px; font-weight: 500; }
+  .org-name { font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--ink-soft); margin-top: 5px; }
+  .masthead-right { text-align: right; font-size: 11.5px; color: var(--ink-soft); }
+  .meta-strip {
+    display: flex; flex-wrap: wrap; gap: 0;
+    border-bottom: 1px solid var(--rule); padding: 10px 0 12px; margin-bottom: 24px;
+    font-size: 12px; color: var(--ink-soft);
+  }
+  .meta-strip span { padding: 0 16px 0 0; }
+  .meta-strip b { color: var(--ink); font-weight: 600; }
+
+  /* Loader */
+  #loadZone {
+    border: 1.5px dashed var(--rule-strong);
+    border-radius: var(--radius);
+    padding: 40px 24px;
+    text-align: center;
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    margin-bottom: 16px;
+  }
+  #loadZone.drag { border-color: var(--green); background: var(--green-tint); color: var(--ink); }
+  #loadZone h2 { font-size: 18px; margin-bottom: 8px; color: var(--ink); }
+  #loadZone p { margin: 4px 0; font-size: 12.5px; }
+  #loadZone .browse-btn {
+    display: inline-block; margin-top: 14px; padding: 9px 18px;
+    background: var(--ink); color: var(--paper); border-radius: var(--radius);
+    font-size: 12px; font-weight: 500; letter-spacing: .3px;
+  }
+  #fileInput { display: none; }
+  #loadError { color: var(--red); font-size: 12.5px; margin-top: 10px; display: none; white-space: pre-wrap; }
+  .load-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 28px; }
+
+  #app { display: none; }
+
+  /* Summary cards */
+  .summary-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; background: var(--rule); border: 1px solid var(--rule); margin-bottom: 24px; }
+  .stat { background: var(--paper-raised); padding: 14px 16px; }
+  .stat .label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .6px; color: var(--ink-faint); margin-bottom: 6px; }
+  .stat .value { font-family: 'Source Serif 4', serif; font-size: 21px; font-weight: 600; }
+  .stat .value.green { color: var(--green); }
+  .stat .value.red { color: var(--red); }
+  .stat .sub { font-size: 11px; color: var(--ink-soft); margin-top: 3px; }
+
+  /* Panels */
+  .panel { background: var(--paper-raised); border: 1px solid var(--rule); border-radius: var(--radius); margin-bottom: 20px; }
+  .panel-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 16px; border-bottom: 1px solid var(--rule); gap: 10px; flex-wrap: wrap;
+  }
+  .panel-head h3 { font-size: 13px; letter-spacing: .2px; }
+  .panel-head .hint { font-size: 11px; color: var(--ink-faint); font-family: 'IBM Plex Mono', monospace; }
+  .panel-body { padding: 16px; }
+  .panel.collapsed .panel-body, .panel.collapsed .table-scroll, .panel.collapsed .pager { display: none !important; }
+
+  .filters-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
+  .field label { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--ink-faint); margin-bottom: 5px; }
+  select, input[type=text], input[type=date], input[type=number] {
+    width: 100%; padding: 7px 9px; background: var(--paper); border: 1px solid var(--rule-strong);
+    border-radius: var(--radius); color: var(--ink); font-family: inherit; font-size: 12.5px;
+  }
+  select:focus, input:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .field.search { grid-column: span 2; }
+  .field.custom-note { font-size: 10.5px; color: var(--amber); margin-top: 4px; }
+
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .btn {
+    padding: 7px 13px; border: 1px solid var(--rule-strong); border-radius: var(--radius);
+    background: var(--paper-raised); color: var(--ink); font-family: inherit; font-size: 12px;
+    cursor: pointer; font-weight: 500;
+  }
+  .btn:hover { border-color: var(--ink); }
+  .btn.primary { background: var(--green); border-color: var(--green); color: #fff; }
+  .btn.primary:hover { background: var(--green-deep); }
+  .btn.ghost { border-color: transparent; color: var(--ink-soft); }
+  .btn.ghost:hover { color: var(--ink); text-decoration: underline; }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .btn.sm { padding: 5px 9px; font-size: 11px; }
+
+  .groupbar { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip {
+    padding: 6px 12px; border: 1px solid var(--rule-strong); border-radius: 100px;
+    font-size: 11.5px; cursor: pointer; color: var(--ink-soft); background: var(--paper-raised);
+  }
+  .chip.active { background: var(--ink); border-color: var(--ink); color: var(--paper); font-weight: 500; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  thead th {
+    text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .4px;
+    color: var(--ink-faint); font-weight: 600; padding: 9px 12px; border-bottom: 1px solid var(--rule-strong);
+    white-space: nowrap; user-select: none; background: var(--paper-raised);
+  }
+  thead th.num, td.num { text-align: right; }
+  .th-inner { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  .th-inner:hover { color: var(--ink); }
+  .th-inner .arrow { opacity: .5; font-size: 9px; }
+  .th-filter-btn {
+    border: none; background: none; color: var(--ink-faint); cursor: pointer; font-size: 10px;
+    padding: 1px 3px; border-radius: 2px; line-height: 1;
+  }
+  .th-filter-btn:hover { color: var(--ink); background: var(--green-tint); }
+  .th-filter-btn.active { color: var(--green); }
+  tbody td { padding: 8px 12px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  tbody tr:hover { background: var(--green-tint); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.name { max-width: 340px; }
+  .bar-track { position: relative; }
+  .bar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--green); opacity: .14; }
+  .bar-cell { position: relative; }
+  .price-up { color: var(--green); font-weight: 600; }
+  .price-down { color: var(--red); font-weight: 600; }
+
+  #trendChart { padding: 16px 16px 4px; border-top: 1px solid var(--rule); }
+  #trendChart svg text { font-family: 'IBM Plex Mono', monospace; fill: var(--ink-soft); }
+  #trendChart .bar { fill: var(--green); }
+  #trendChart .bar:hover { fill: var(--green-deep); }
+  #trendChart .bar.neg { fill: var(--red); }
+  #trendChart .axis-line { stroke: var(--rule-strong); stroke-width: 1; }
+
+  .table-scroll { overflow-x: auto; }
+  .empty-note { padding: 30px 16px; text-align: center; color: var(--ink-faint); font-size: 12.5px; }
+
+  .pager { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-top: 1px solid var(--rule); font-size: 11.5px; color: var(--ink-soft); }
+  .pager .btns { display: flex; gap: 6px; }
+  .pager button { background: none; border: 1px solid var(--rule-strong); border-radius: var(--radius); padding: 4px 9px; font-family: inherit; color: var(--ink); cursor: pointer; font-size: 11.5px; }
+  .pager button:disabled { opacity: .35; cursor: not-allowed; }
+
+  .foot-total td { font-weight: 600; border-top: 1.5px solid var(--ink); border-bottom: none; background: var(--paper); }
+
+  ::selection { background: var(--green); color: #fff; }
+  a { color: var(--green); }
+
+  /* Merge summary */
+  .merge-list { font-size: 12px; }
+  .merge-file-row { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px dashed var(--rule); }
+  .merge-file-row:last-child { border-bottom: none; }
+  .merge-file-row .fname { color: var(--ink); }
+  .merge-file-row .frows { color: var(--ink-soft); white-space: nowrap; }
+  .merge-total { margin-top: 8px; padding-top: 8px; border-top: 1.5px solid var(--ink); font-weight: 600; display: flex; justify-content: space-between; }
+  .warn-badge { display: inline-block; background: var(--amber-tint); color: var(--amber); font-size: 10.5px; padding: 2px 7px; border-radius: 100px; margin-left: 6px; }
+
+  /* chart panel */
+  .chart-wrap { height: 220px; margin-top: 4px; }
+  .last10-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px,1fr)); gap: 6px 14px; font-size: 11.5px; margin-bottom: 10px; }
+  .last10-list .d { display: flex; justify-content: space-between; padding: 4px 8px; background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius); }
+  .last10-list .d.incomplete { border-color: var(--amber); background: var(--amber-tint); }
+  .last10-list .d .amt { font-weight: 600; }
+
+  /* filter panel (advanced column filter) */
+  .filter-panel {
+    position: fixed; z-index: 9999; width: 300px; max-height: 420px;
+    background: var(--paper-raised); border: 1px solid var(--rule-strong); border-radius: var(--radius);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.18); padding: 10px; overflow: auto; display: none;
+    font-size: 12px;
+  }
+  .filter-panel h4 { margin: 0 0 8px; font-size: 12.5px; }
+  .filter-panel .search-input { margin-bottom: 8px; }
+  .filter-panel .sort-actions, .filter-panel .actions-bar { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  .values-list { max-height: 200px; overflow: auto; border: 1px solid var(--rule); padding: 4px; border-radius: var(--radius); background: var(--paper); }
+  .value-row { display: flex; align-items: center; gap: 6px; padding: 3px 2px; }
+  .value-row input { width: auto; }
+  .value-label { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .value-count { color: var(--ink-faint); font-size: 10.5px; }
+  .filter-actions { display: flex; gap: 8px; margin-top: 8px; justify-content: flex-end; }
+
+  /* logs */
+  .log-box { max-height: 130px; overflow: auto; font-size: 11px; background: var(--paper); padding: 8px; border-radius: var(--radius); border: 1px solid var(--rule); }
+  .log-box div { padding: 1px 0; color: var(--ink-soft); }
+  .log-box div b { color: var(--ink); }
+
+  @media (max-width: 720px) {
+    .summary-row { grid-template-columns: repeat(2, 1fr); }
+    .field.search { grid-column: span 1; }
+    .filter-panel { width: 88vw; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="masthead">
+    <div>
+      <div class="kicker">CLOUD SPEND LEDGER</div>
+      <h1>Atlas Invoice Analyzer</h1>
+      <div class="org-name" id="orgName" style="display:none;"></div>
+    </div>
+    <div class="masthead-right">Runs entirely in this browser tab.<br>No data leaves this page.</div>
+  </div>
+  <div id="metaStrip" class="meta-strip"></div>
+
+  <div id="loadZone">
+    <h2>Drop one or more Atlas invoice files here</h2>
+    <p>Accepts the CSV export from the Atlas Billing tab, or .xlsx / .xls sheets. Drop multiple files to merge several months or orgs into one view.</p>
+    <p style="color: var(--ink-faint);">Re-drop new files anytime to replace the current set — nothing is saved or uploaded.</p>
+    <span class="browse-btn">Choose file(s)</span>
+    <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" multiple>
+    <div id="loadError"></div>
+  </div>
+  <div class="load-actions">
+    <button class="btn ghost sm" id="sampleBtn">Load sample two-invoice merge</button>
+  </div>
+
+  <div id="app">
+
+    <div class="summary-row" id="summaryRow"></div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Merge verification</h3>
+        <div class="hint" id="mergeHint"></div>
+      </div>
+      <div class="panel-body">
+        <div id="mergeSummary" class="merge-list">No files loaded</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Filters</h3>
+        <div class="toolbar">
+          <label style="display:flex; align-items:center; gap:6px; font-size:11.5px; color: var(--ink-soft); cursor:pointer;">
+            <input type="checkbox" id="excludeCredits" checked style="cursor:pointer;"> Exclude billing credits
+          </label>
+          <button class="btn ghost" id="clearFilters">Clear all</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="filters-grid" id="filtersGrid"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Group by</h3>
+        <div class="toolbar">
+          <button class="btn" id="toggleRaw">View raw rows</button>
+          <button class="btn" id="snapshotBtn">Save as JPEG</button>
+          <button class="btn" id="exportXlsxBtn">Export XLSX</button>
+          <button class="btn primary" id="exportBtn">Export CSV</button>
+        </div>
+      </div>
+      <div class="panel-body" style="padding-bottom: 12px;">
+        <div class="groupbar" id="groupBar"></div>
+        <label id="splitBySkuWrap" style="display:none; align-items:center; gap:7px; margin-top:12px; font-size:12px; color: var(--ink-soft); cursor:pointer;">
+          <input type="checkbox" id="splitBySku" style="cursor:pointer;"> Break each period down by SKU
+        </label>
+      </div>
+      <div id="trendChart" style="display:none;"></div>
+      <div class="table-scroll">
+        <table id="resultTable">
+          <thead><tr id="tableHead"></tr></thead>
+          <tbody id="tableBody"></tbody>
+          <tfoot id="tableFoot"></tfoot>
+        </table>
+        <div class="empty-note" id="emptyNote" style="display:none;">No rows match the current filters.</div>
+      </div>
+      <div class="pager" id="pager" style="display:none;">
+        <span id="pagerInfo"></span>
+        <div class="btns">
+          <button id="prevPage">&larr; Prev</button>
+          <button id="nextPage">Next &rarr;</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Usage date — last 10 days <span class="hint">(last 2 marked incomplete, credits excluded)</span></h3>
+      </div>
+      <div class="panel-body">
+        <div id="last10List" class="last10-list"></div>
+        <div class="chart-wrap"><canvas id="last10Chart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Amount changes by SKU (day &rarr; day)</h3>
+        <div class="hint">Sum(Amount) per Project + Cluster + SKU, per day, vs. previous day. Credits excluded.</div>
+      </div>
+      <div class="panel-body">
+        <div class="toolbar" style="margin-bottom:12px;">
+          <div class="field" style="min-width:170px;">
+            <label>Project</label>
+            <select id="priceProjectPicker"><option value="">All projects</option></select>
+          </div>
+          <div class="field" style="min-width:170px;">
+            <label>Cluster</label>
+            <select id="priceClusterPicker"><option value="">All clusters</option></select>
+          </div>
+          <div class="field" style="min-width:120px;">
+            <label>Min % change</label>
+            <input id="minPct" type="number" value="0" step="0.1">
+          </div>
+          <button class="btn" id="refreshPriceChanges" style="align-self:flex-end;">Refresh</button>
+        </div>
+        <div class="table-scroll">
+          <table id="priceChangeTable">
+            <thead><tr>
+              <th data-key="date"><span class="th-inner">Date <span class="arrow"></span></span></th>
+              <th data-key="project"><span class="th-inner">Project <span class="arrow"></span></span></th>
+              <th data-key="cluster"><span class="th-inner">Cluster <span class="arrow"></span></span></th>
+              <th data-key="sku"><span class="th-inner">SKU <span class="arrow"></span></span></th>
+              <th class="num" data-key="amount"><span class="th-inner">Day amount <span class="arrow"></span></span></th>
+              <th class="num" data-key="prevAmount"><span class="th-inner">Prev day <span class="arrow"></span></span></th>
+              <th class="num" data-key="delta"><span class="th-inner">&Delta; amount <span class="arrow"></span></span></th>
+              <th class="num" data-key="pct"><span class="th-inner">% &Delta; <span class="arrow"></span></span></th>
+            </tr></thead>
+            <tbody id="priceChangeBody"></tbody>
+          </table>
+          <div class="empty-note" id="priceEmptyNote" style="display:none;">No day-over-day changes for the current filters.</div>
+        </div>
+        <div style="margin-top:10px; font-size:12px;">Showing <b id="priceChangeCount">0</b> changes &middot; sum of &Delta; shown: <b id="priceChangeTotalDelta">0.00</b></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Log</h3>
+        <button class="btn ghost sm" id="clearLog">Clear</button>
+      </div>
+      <div class="panel-body">
+        <div id="log" class="log-box"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="filterPanel" class="filter-panel"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ================= State =================
+  var RAW_ROWS = [];        // merged rows: {..original cols.., __amount, __qty, __unitPrice, __date, __sourceFile}
+  var COLUMNS = [];         // union of column headers across loaded files, canonical order first
+  var FILES_META = [];      // [{name, rows, invoiceNumber, billingPeriod, orgName, minDate, maxDate}]
+  var CANONICAL_ORDER = ['Date','Usage Date','Description','Note','Organization Name','Organization ID',
+    'Project','Project ID','SKU','Region','Cluster','Replica Set','Config Server','Application',
+    'Unit','Unit Price','Quantity','Discount Percent','Amount','Cloud Provider'];
+  var FILTER_FIELDS = ["Project","SKU","Cluster","Region","Cloud Provider","Application"];
+
+  var activeFilters = {};   // field -> Set(display-string) ; presence of key = filter active (empty set = matches nothing)
+  var searchTerm = "";
+  var dateStart = null, dateEnd = null; // Date (usage date range)
+  var groupField = "Project";
+  var rawMode = false;
+  var splitBySku = false;
+  var excludeCredits = true;
+  var sortCol = "amount", sortDir = -1;
+  var page = 0;
+  var PAGE_SIZE = 40;
+  var lastPivot = null;
+  var last10Chart = null;
+  var priceSortKey = 'date', priceSortDir = -1;
+
+  var loadZone = document.getElementById('loadZone');
+  var fileInput = document.getElementById('fileInput');
+  var loadError = document.getElementById('loadError');
+  var app = document.getElementById('app');
+
+  // ================= Logging =================
+  function log(msg){
+    var l = document.getElementById('log');
+    var d = document.createElement('div');
+    d.innerHTML = '[' + new Date().toLocaleTimeString() + '] ' + esc(msg);
+    l.insertBefore(d, l.firstChild);
+  }
+  document.getElementById('clearLog').addEventListener('click', function(){ document.getElementById('log').innerHTML=''; });
+
+  // ================= File loading (drag/drop + click) =================
+  loadZone.addEventListener('click', function(){ fileInput.click(); });
+  fileInput.addEventListener('change', function(e){
+    if (e.target.files && e.target.files.length) handleFiles(e.target.files);
+  });
+  ['dragenter','dragover'].forEach(function(ev){
+    loadZone.addEventListener(ev, function(e){ e.preventDefault(); loadZone.classList.add('drag'); });
+  });
+  ['dragleave','drop'].forEach(function(ev){
+    loadZone.addEventListener(ev, function(e){ e.preventDefault(); loadZone.classList.remove('drag'); });
+  });
+  loadZone.addEventListener('drop', function(e){
+    e.preventDefault();
+    if (e.dataTransfer.files && e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+  });
+
+  function showError(msg){
+    loadError.textContent = msg;
+    loadError.style.display = 'block';
+  }
+
+  async function handleFiles(fileList){
+    loadError.style.display = 'none';
+    var files = Array.prototype.slice.call(fileList);
+    try {
+      var parsedAll = [];
+      for (var i=0;i<files.length;i++){
+        var p = await parseFile(files[i]);
+        parsedAll.push(p);
+        log('Loaded ' + files[i].name + ' — rows: ' + p.dataRows.length + (p.meta ? ' (Atlas invoice format)' : ' (generic sheet)'));
+      }
+      var unionHeaders = [];
+      var allRows = [];
+      var filesMeta = [];
+      parsedAll.forEach(function(p, idx){
+        p.headerRow.forEach(function(h){ if (h && unionHeaders.indexOf(h) === -1) unionHeaders.push(h); });
+        p.dataRows.forEach(function(r){ allRows.push(r); });
+        var dmin = null, dmax = null;
+        p.dataRows.forEach(function(r){
+          if (r.__date){ if (!dmin || r.__date < dmin) dmin = r.__date; if (!dmax || r.__date > dmax) dmax = r.__date; }
+        });
+        filesMeta.push({
+          name: files[idx] ? files[idx].name : p.name,
+          rows: p.dataRows.length,
+          invoiceNumber: p.meta ? p.meta['Invoice Number'] : null,
+          billingPeriod: p.meta ? p.meta['Billing Period'] : null,
+          orgName: p.meta ? p.meta['Organization Name'] : null,
+          minDate: dmin, maxDate: dmax
+        });
+      });
+      if (!allRows.length) throw new Error('No usage rows found in the selected file(s).');
+
+      // order columns: canonical first (only those present), then any extras in first-seen order
+      var ordered = CANONICAL_ORDER.filter(function(c){ return unionHeaders.indexOf(c) !== -1; });
+      unionHeaders.forEach(function(h){ if (ordered.indexOf(h) === -1) ordered.push(h); });
+
+      RAW_ROWS = allRows;
+      COLUMNS = ordered;
+      FILES_META = filesMeta;
+      activeFilters = {}; searchTerm = ''; dateStart = null; dateEnd = null;
+      document.getElementById('startDateFilter') && (document.getElementById('startDateFilter').value = '');
+      document.getElementById('endDateFilter') && (document.getElementById('endDateFilter').value = '');
+      page = 0;
+      log('Combined ' + filesMeta.length + ' file(s) — total rows: ' + allRows.length);
+      boot();
+    } catch(err){
+      showError('Could not read one of the selected files as an Atlas invoice export. ' + err.message);
+      log('Error: ' + err.message);
+    }
+  }
+
+  // ---- Sample loader (mirrors old "two-invoice merge" test) ----
+  document.getElementById('sampleBtn').addEventListener('click', function(){
+    loadError.style.display = 'none';
+    var sample1 = "Invoice Number,SAMPLE-0001,\nBilling Period,\"October 1, 2025 - November 1, 2025\",\nOrganization Name,sample-org-storage,\n\nDate,Usage Date,Description,Project,SKU,Region,Cluster,Unit Price,Quantity,Amount,Cloud Provider\n"+
+      "10/17/2025,10/15/2025,Block Storage,storage-proj,StorageSKU,Mumbai,kio-storage,0.10,20,2.00,AWS\n"+
+      "10/18/2025,10/16/2025,Backup Snapshot,storage-proj,BackupSKU,Mumbai,kio-storage,0.05,50,2.50,AWS\n"+
+      "10/19/2025,10/17/2025,AWS Data Transfer,kio-pp,DataTransfer,Mumbai,kio-pp-active-active,0.01,100,1.00,AWS\n";
+    var sample2 = "Invoice Number,SAMPLE-0002,\nBilling Period,\"October 1, 2025 - November 1, 2025\",\nOrganization Name,sample-org-mongo,\n\nDate,Usage Date,Description,Project,SKU,Region,Cluster,Unit Price,Quantity,Amount,Cloud Provider\n"+
+      "10/17/2025,10/17/2025,Atlas M40 Instance,ki-dev-mongo,SKU-1,Mumbai,kio-dev-mongo,0.25,10,10.00,AWS\n"+
+      "10/18/2025,10/18/2025,Atlas M40 Instance,ki-dev-mongo,SKU-1,Mumbai,kio-dev-mongo,0.24,20,20.00,AWS\n"+
+      "10/19/2025,10/19/2025,Atlas M40 Instance,ki-dev-mongo,SKU-1,Mumbai,kio-dev-mongo,0.235,22,22.00,AWS\n"+
+      "10/18/2025,10/16/2025,Credit (Admin),kio-dev,Credit,,,,4203,-42.03,\n";
+    var f1 = new File([sample1], 'sample-invoice-1.csv', {type:'text/csv'});
+    var f2 = new File([sample2], 'sample-invoice-2.csv', {type:'text/csv'});
+    handleFiles([f1, f2]);
+  });
+
+  // ================= Parsing =================
+  function readAsText(file){ return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(e){res(e.target.result);}; r.onerror=function(){rej(new Error('File read error'));}; r.readAsText(file); }); }
+  function readAsArrayBuffer(file){ return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(e){res(e.target.result);}; r.onerror=function(){rej(new Error('File read error'));}; r.readAsArrayBuffer(file); }); }
+
+  function excelSerialToDate(n){
+    try { var p = XLSX.SSF.parse_date_code(Number(n)); if (p && p.y) return new Date(p.y, p.m-1, p.d); } catch(e){}
+    return null;
+  }
+
+  function parseAnyDate(v){
+    if (v === null || v === undefined || v === '') return null;
+    if (v instanceof Date) return isNaN(v.getTime()) ? null : new Date(v.getFullYear(), v.getMonth(), v.getDate());
+    if (typeof v === 'number' && isFinite(v)) { var d1 = excelSerialToDate(v); return d1; }
+    var s = String(v).trim();
+    var parts = s.split('/');
+    if (parts.length === 3){
+      var d = new Date(parseInt(parts[2],10), parseInt(parts[0],10)-1, parseInt(parts[1],10));
+      if (!isNaN(d.getTime())) return d;
+    }
+    var d2 = new Date(s);
+    if (!isNaN(d2.getTime())) return new Date(d2.getFullYear(), d2.getMonth(), d2.getDate());
+    return null;
+  }
+
+  async function parseFile(file){
+    var name = file.name.toLowerCase();
+    var isCsv = name.endsWith('.csv');
+    var all; // array of arrays
+    if (isCsv){
+      var text = await readAsText(file);
+      all = Papa.parse(text, { skipEmptyLines: false }).data;
+    } else {
+      var buf = await readAsArrayBuffer(file);
+      var wb = XLSX.read(new Uint8Array(buf), { type: 'array', cellDates: true });
+      var sheet = wb.Sheets[wb.SheetNames[0]];
+      all = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    }
+
+    // 1) Try Atlas invoice metadata format: header row where col0==='Date' && col1==='Usage Date'
+    var headerIdx = -1;
+    for (var i=0;i<all.length;i++){
+      var row = all[i];
+      if (row && String(row[0]||'').trim() === 'Date' && String(row[1]||'').trim() === 'Usage Date'){ headerIdx = i; break; }
+    }
+    var meta = null;
+    if (headerIdx !== -1){
+      meta = {};
+      for (var m=0;m<headerIdx;m++){
+        var r = all[m];
+        if (!r || !r[0]) continue;
+        var key = String(r[0]).trim();
+        var val = String(r[1]||'').trim();
+        if (key) meta[key] = val;
+      }
+    } else {
+      // 2) Fallback: scan first 20 rows for any row containing a header-ish cell with "date" in it
+      for (var j=0;j<Math.min(20, all.length);j++){
+        var row2 = all[j] || [];
+        if (row2.some(function(c){ return typeof c === 'string' && c.toLowerCase().indexOf('date') !== -1; })){
+          headerIdx = j; break;
+        }
+      }
+      if (headerIdx === -1) headerIdx = 0;
+    }
+
+    var headerRow = (all[headerIdx] || []).map(function(h){ return String(h||'').trim(); });
+    var dataArrays = all.slice(headerIdx+1).filter(function(r){
+      return r && r.length > 1 && r.some(function(c){ return c !== '' && c != null; });
+    });
+
+    var dataRows = dataArrays.map(function(arr){
+      var obj = {};
+      for (var c=0;c<headerRow.length;c++){ if (headerRow[c]) obj[headerRow[c]] = arr[c] !== undefined ? arr[c] : ''; }
+      obj.__amount = parseFloat(String(obj['Amount']||'').replace(/,/g,'')) || 0;
+      obj.__qty = parseFloat(String(obj['Quantity']||'').replace(/,/g,'')) || 0;
+      obj.__unitPrice = parseFloat(String(obj['Unit Price']||'').replace(/,/g,'')) || 0;
+      obj.__date = parseAnyDate(obj['Usage Date'] !== undefined ? obj['Usage Date'] : obj['Date']);
+      obj.__sourceFile = file.name;
+      return obj;
+    });
+
+    return { name: file.name, headerRow: headerRow, dataRows: dataRows, meta: meta };
+  }
+
+  // ================= Boot / render orchestration =================
+  function boot(){
+    loadZone.style.display = 'none';
+    document.querySelector('.load-actions').style.display = 'none';
+    app.style.display = 'block';
+    renderMeta();
+    renderMergeSummary();
+    renderFilters();
+    renderGroupBar();
+    populatePricePickers();
+    render();
+  }
+
+  function fmtMoney(n){
+    var neg = n < 0;
+    var s = Math.abs(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+    return (neg ? '\u2212$' : '$') + s;
+  }
+  function fmtNum(n){ return n.toLocaleString('en-US', {maximumFractionDigits:2}); }
+  function fmtDate(d){ if(!d) return ''; return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+  function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+  function renderMeta(){
+    var strip = document.getElementById('metaStrip');
+    var parts = [];
+    var single = FILES_META.length === 1 ? FILES_META[0] : null;
+    if (single && single.invoiceNumber) parts.push('<span><b>Invoice</b> ' + esc(single.invoiceNumber) + '</span>');
+    if (single && single.billingPeriod) parts.push('<span><b>Period</b> ' + esc(single.billingPeriod) + '</span>');
+    if (!single && FILES_META.length > 1) parts.push('<span><b>Files merged</b> ' + FILES_META.length + '</span>');
+    parts.push('<span><b>Line items</b> ' + RAW_ROWS.length.toLocaleString() + '</span>');
+    strip.innerHTML = parts.join('');
+
+    var orgEl = document.getElementById('orgName');
+    var orgNames = uniqueNonEmpty(FILES_META.map(function(f){ return f.orgName; }));
+    if (orgNames.length){
+      orgEl.textContent = orgNames.join(' · ');
+      orgEl.style.display = 'block';
+    } else {
+      orgEl.style.display = 'none';
+    }
+  }
+  function uniqueNonEmpty(arr){
+    var seen = {}; var out = [];
+    arr.forEach(function(v){ if (v && !seen[v]){ seen[v]=true; out.push(v); } });
+    return out;
+  }
+
+  function renderMergeSummary(){
+    var box = document.getElementById('mergeSummary');
+    if (!FILES_META.length){ box.textContent = 'No files loaded'; return; }
+    var rowsHtml = FILES_META.map(function(f){
+      var extra = [];
+      if (f.invoiceNumber) extra.push('Invoice ' + esc(f.invoiceNumber));
+      if (f.billingPeriod) extra.push(esc(f.billingPeriod));
+      if (f.minDate && f.maxDate) extra.push(fmtDate(f.minDate) + ' \u2013 ' + fmtDate(f.maxDate));
+      return '<div class="merge-file-row"><span class="fname">' + esc(f.name) + (extra.length ? ' <span style="color:var(--ink-faint);">(' + extra.join(' · ') + ')</span>' : '') + '</span>' +
+        '<span class="frows">' + f.rows.toLocaleString() + ' rows</span></div>';
+    }).join('');
+    var total = FILES_META.reduce(function(s,f){ return s+f.rows; }, 0);
+    box.innerHTML = '<div class="merge-list">' + rowsHtml + '</div>' +
+      '<div class="merge-total"><span>Combined</span><span>' + total.toLocaleString() + ' rows</span></div>';
+    document.getElementById('mergeHint').textContent = COLUMNS.length + ' columns detected';
+  }
+
+  // ================= Field value helper (used for filters, both quick + advanced) =================
+  function isDateField(field){ return /date/i.test(field); }
+  function fieldValue(row, field){
+    var v = row[field];
+    if (isDateField(field)){
+      var d = (field === 'Usage Date' || field === 'Date') ? row.__date : parseAnyDate(v);
+      if (d) return fmtDate(d);
+      if (v === '' || v === null || v === undefined) return '(blank)';
+      return String(v).trim();
+    }
+    if (v === '' || v === null || v === undefined) return '(blank)';
+    return String(v).trim();
+  }
+
+  function uniqueFieldValues(field){
+    var set = {};
+    RAW_ROWS.forEach(function(r){ var v = fieldValue(r, field); if (v && v !== '(blank)') set[v]=true; });
+    return Object.keys(set).sort();
+  }
+
+  // ================= Quick filters (dropdowns + search + date range) =================
+  function renderFilters(){
+    var grid = document.getElementById('filtersGrid');
+    var html = '';
+    FILTER_FIELDS.forEach(function(field){
+      if (COLUMNS.indexOf(field) === -1) return;
+      var opts = uniqueFieldValues(field);
+      html += '<div class="field"><label>' + esc(field) + '</label><select data-field="' + esc(field) + '">';
+      html += '<option value="">All (' + opts.length + ')</option>';
+      opts.forEach(function(o){ html += '<option value="' + esc(o) + '">' + esc(o) + '</option>'; });
+      html += '</select></div>';
+    });
+    html += '<div class="field"><label>Usage date from</label><input type="date" id="startDateFilter"></div>';
+    html += '<div class="field"><label>Usage date to</label><input type="date" id="endDateFilter"></div>';
+    html += '<div class="field search"><label>Search description / note / cluster</label><input type="text" id="searchInput" placeholder="e.g. backup, PrivateLink, cluster name"></div>';
+    grid.innerHTML = html;
+
+    grid.querySelectorAll('select').forEach(function(sel){
+      sel.addEventListener('change', function(){
+        var field = sel.getAttribute('data-field');
+        if (sel.value === '') delete activeFilters[field];
+        else activeFilters[field] = new Set([sel.value]);
+        page = 0;
+        render();
+      });
+    });
+    document.getElementById('searchInput').addEventListener('input', function(e){
+      searchTerm = e.target.value.toLowerCase();
+      page = 0;
+      render();
+    });
+    document.getElementById('startDateFilter').addEventListener('change', function(e){
+      dateStart = e.target.value ? new Date(e.target.value + 'T00:00:00') : null;
+      page = 0; render();
+    });
+    document.getElementById('endDateFilter').addEventListener('change', function(e){
+      dateEnd = e.target.value ? new Date(e.target.value + 'T23:59:59') : null;
+      page = 0; render();
+    });
+
+    document.getElementById('clearFilters').onclick = function(){
+      activeFilters = {};
+      searchTerm = '';
+      dateStart = null; dateEnd = null;
+      grid.querySelectorAll('select').forEach(function(s){ s.value=''; });
+      document.getElementById('searchInput').value = '';
+      document.getElementById('startDateFilter').value = '';
+      document.getElementById('endDateFilter').value = '';
+      page = 0;
+      log('Cleared all filters');
+      render();
+    };
+  }
+
+  // reflect current activeFilters state onto the quick-select dropdowns (called each render)
+  function syncQuickFilterSelects(){
+    document.querySelectorAll('#filtersGrid select[data-field]').forEach(function(sel){
+      var field = sel.getAttribute('data-field');
+      var spec = activeFilters[field];
+      if (!spec) { sel.value = ''; return; }
+      if (spec.size === 1) { var only = Array.from(spec)[0]; if ([...sel.options].some(function(o){return o.value===only;})) sel.value = only; }
+      else { sel.value = ''; } // custom multi-selection from advanced panel — dropdown shows "All" but filter still applies
+    });
+  }
+
+  // ================= Advanced per-column filter panel (Excel-style) =================
+  var panel = document.getElementById('filterPanel');
+  document.addEventListener('click', function(e){ if (panel.style.display==='block' && !panel.contains(e.target) && !e.target.closest('.th-filter-btn')) hidePanel(); });
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && panel.style.display==='block') hidePanel(); });
+  function hidePanel(){ panel.style.display='none'; panel.innerHTML=''; }
+
+  function getCountsForColumn(field, excludingOwnFilter){
+    var counts = {};
+    RAW_ROWS.forEach(function(r){
+      for (var f in activeFilters){
+        if (excludingOwnFilter && f === field) continue;
+        if (!matchesFilterField(r, f)) return;
+      }
+      if (dateStart || dateEnd){ if (!inDateRange(r)) return; }
+      if (searchTerm && !matchesSearch(r)) return;
+      var v = fieldValue(r, field);
+      counts[v] = (counts[v]||0) + 1;
+    });
+    return counts;
+  }
+
+  function openFilterPanelAnchored(field, anchorElem){
+    panel.style.display = 'block';
+    panel.innerHTML = '';
+    var rect = anchorElem.getBoundingClientRect();
+    var left = rect.left, top = rect.bottom + 6;
+    var pageWidth = window.innerWidth, pageHeight = window.innerHeight;
+    var width = 300, height = 420;
+    if (left + width > pageWidth) left = Math.max(8, pageWidth - width - 8);
+    if (top + height > pageHeight) top = Math.max(8, rect.top - height - 6);
+    panel.style.left = left + 'px'; panel.style.top = top + 'px';
+
+    var h = document.createElement('h4'); h.textContent = 'Filter: ' + field; panel.appendChild(h);
+    var search = document.createElement('input'); search.type='text'; search.className='search-input'; search.placeholder='Search values…';
+    panel.appendChild(search);
+
+    var sortBar = document.createElement('div'); sortBar.className='sort-actions';
+    var sortAZ = document.createElement('button'); sortAZ.className='btn sm ghost'; sortAZ.textContent='A\u2192Z';
+    var sortZA = document.createElement('button'); sortZA.className='btn sm ghost'; sortZA.textContent='Z\u2192A';
+    sortBar.appendChild(sortAZ); sortBar.appendChild(sortZA); panel.appendChild(sortBar);
+
+    var actionsBar = document.createElement('div'); actionsBar.className='actions-bar';
+    var selectAllBtn = document.createElement('button'); selectAllBtn.className='btn sm ghost'; selectAllBtn.textContent='Select all';
+    var clearAllBtn = document.createElement('button'); clearAllBtn.className='btn sm ghost'; clearAllBtn.textContent='Clear';
+    actionsBar.appendChild(selectAllBtn); actionsBar.appendChild(clearAllBtn); panel.appendChild(actionsBar);
+
+    var valuesWrap = document.createElement('div'); valuesWrap.className='values-list'; panel.appendChild(valuesWrap);
+
+    var allVals = {}; RAW_ROWS.forEach(function(r){ allVals[fieldValue(r, field)] = true; });
+    var items = Object.keys(allVals);
+    var counts = getCountsForColumn(field, true);
+    var spec = activeFilters[field];
+    var checkedState = {};
+    items.forEach(function(v){ checkedState[v] = spec ? spec.has(v) : true; });
+
+    var currentSort = 'az';
+    function renderList(filterText){
+      valuesWrap.innerHTML = '';
+      var q = (filterText||'').trim().toLowerCase();
+      var arr = items.slice();
+      if (q) arr = arr.filter(function(v){ return v.toLowerCase().indexOf(q) !== -1; });
+      arr.sort(function(a,b){ return currentSort==='az' ? a.localeCompare(b) : b.localeCompare(a); });
+      arr.forEach(function(v){
+        var row = document.createElement('div'); row.className='value-row';
+        var cb = document.createElement('input'); cb.type='checkbox'; cb.checked = !!checkedState[v];
+        var lbl = document.createElement('div'); lbl.className='value-label'; lbl.textContent = v; lbl.title = v;
+        var cnt = document.createElement('div'); cnt.className='value-count'; cnt.textContent = counts[v]||0;
+        row.appendChild(cb); row.appendChild(lbl); row.appendChild(cnt);
+        cb.addEventListener('change', function(){ checkedState[v] = cb.checked; });
+        valuesWrap.appendChild(row);
+      });
+    }
+    renderList('');
+    search.addEventListener('input', function(){ renderList(search.value); });
+    sortAZ.addEventListener('click', function(){ currentSort='az'; renderList(search.value); });
+    sortZA.addEventListener('click', function(){ currentSort='za'; renderList(search.value); });
+    selectAllBtn.addEventListener('click', function(){ items.forEach(function(v){checkedState[v]=true;}); renderList(search.value); });
+    clearAllBtn.addEventListener('click', function(){ items.forEach(function(v){checkedState[v]=false;}); renderList(search.value); });
+
+    var bottom = document.createElement('div'); bottom.className='filter-actions';
+    var apply = document.createElement('button'); apply.className='btn primary sm'; apply.textContent='Apply';
+    var cancel = document.createElement('button'); cancel.className='btn ghost sm'; cancel.textContent='Cancel';
+    bottom.appendChild(cancel); bottom.appendChild(apply); panel.appendChild(bottom);
+    cancel.addEventListener('click', hidePanel);
+    apply.addEventListener('click', function(){
+      var chosen = Object.keys(checkedState).filter(function(k){ return checkedState[k]; });
+      if (chosen.length === items.length) delete activeFilters[field];
+      else activeFilters[field] = new Set(chosen);
+      log('Column filter on "' + field + '" \u2192 ' + (activeFilters[field] ? chosen.length + ' value(s) selected' : 'all'));
+      hidePanel();
+      page = 0;
+      render();
+    });
+  }
+
+  // ================= Filtering engine =================
+  function matchesFilterField(row, field){
+    var spec = activeFilters[field];
+    if (!spec) return true;
+    var v = fieldValue(row, field);
+    return spec.has(v);
+  }
+  function inDateRange(row){
+    if (!row.__date) return !(dateStart || dateEnd); // rows without a parseable date pass only if no range set
+    if (dateStart && row.__date < dateStart) return false;
+    if (dateEnd && row.__date > dateEnd) return false;
+    return true;
+  }
+  function matchesSearch(row){
+    var hay = ((row['Description']||'') + ' ' + (row['Note']||'') + ' ' + (row['Cluster']||'')).toLowerCase();
+    return hay.indexOf(searchTerm) !== -1;
+  }
+  function getFiltered(){
+    return RAW_ROWS.filter(function(r){
+      for (var f in activeFilters){ if (!matchesFilterField(r, f)) return false; }
+      if ((dateStart || dateEnd) && !inDateRange(r)) return false;
+      if (searchTerm && !matchesSearch(r)) return false;
+      return true;
+    });
+  }
+  function isCreditRow(r){ return (r['SKU']||'').trim() === 'Credit'; }
+
+  // ================= Group-by config =================
+  var GROUP_OPTIONS = [
+    {key:'Project', label:'Project'},
+    {key:'SKU', label:'SKU'},
+    {key:'Cluster', label:'Cluster'},
+    {key:'Region', label:'Region'},
+    {key:'Cloud Provider', label:'Cloud provider'},
+    {key:'Application', label:'Application'},
+    {key:'Daily', label:'Daily'},
+    {key:'Weekly', label:'Weekly'},
+    {key:'Description', label:'Description'}
+  ];
+  var TIME_GROUPS = {'Daily':1, 'Weekly':1};
+
+  function fmtDay(d){ return d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'}); }
+  function weekStart(d){ var day = d.getDay(); var diff = (day===0 ? -6 : 1-day); return new Date(d.getFullYear(), d.getMonth(), d.getDate()+diff); }
+  function weekLabel(mon){
+    var sun = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate()+6);
+    var sameYear = mon.getFullYear() === sun.getFullYear();
+    var f = function(x){ return x.toLocaleDateString('en-US', {month:'short', day:'numeric'}); };
+    return f(mon) + '\u2013' + f(sun) + (sameYear ? ', ' + sun.getFullYear() : '');
+  }
+
+  function renderGroupBar(){
+    var bar = document.getElementById('groupBar');
+    bar.innerHTML = GROUP_OPTIONS.filter(function(g){ return TIME_GROUPS[g.key] || COLUMNS.indexOf(g.key) !== -1; }).map(function(g){
+      return '<span class="chip' + (g.key===groupField && !rawMode ? ' active' : '') + '" data-key="' + g.key + '">' + g.label + '</span>';
+    }).join('');
+    bar.querySelectorAll('.chip').forEach(function(chip){
+      chip.addEventListener('click', function(){
+        groupField = chip.getAttribute('data-key');
+        rawMode = false;
+        page = 0;
+        sortCol = 'amount'; sortDir = -1;
+        document.getElementById('toggleRaw').textContent = 'View raw rows';
+        renderGroupBar();
+        render();
+      });
+    });
+    var wrap = document.getElementById('splitBySkuWrap');
+    var isTime = !!TIME_GROUPS[groupField];
+    wrap.style.display = (isTime && !rawMode) ? 'flex' : 'none';
+    if (!isTime) splitBySku = false;
+    document.getElementById('splitBySku').checked = splitBySku;
+  }
+  document.getElementById('splitBySku').addEventListener('change', function(e){ splitBySku = e.target.checked; render(); });
+  document.getElementById('toggleRaw').addEventListener('click', function(){
+    rawMode = !rawMode;
+    page = 0;
+    sortCol = rawMode ? 'Usage Date' : 'amount';
+    sortDir = -1;
+    this.textContent = rawMode ? 'View grouped summary' : 'View raw rows';
+    renderGroupBar();
+    render();
+  });
+  document.getElementById('excludeCredits').addEventListener('change', function(e){ excludeCredits = e.target.checked; page = 0; render(); });
+
+  function groupRows(rows){
+    var map = {};
+    var isTime = !!TIME_GROUPS[groupField];
+    rows.forEach(function(r){
+      var key, ts;
+      if (isTime){
+        var d = r.__date;
+        if (!d){ key = '(unknown date)'; ts = -Infinity; }
+        else if (groupField === 'Daily'){ key = fmtDay(d); ts = d.getTime(); }
+        else { var ws = weekStart(d); key = weekLabel(ws); ts = ws.getTime(); }
+      } else {
+        key = (r[groupField] || '(blank)').toString().trim() || '(blank)';
+        ts = 0;
+      }
+      if (!map[key]) map[key] = {name:key, amount:0, qty:0, count:0, ts:ts};
+      map[key].amount += r.__amount;
+      map[key].qty += r.__qty;
+      map[key].count += 1;
+    });
+    return Object.keys(map).map(function(k){ return map[k]; });
+  }
+
+  // ================= Master render =================
+  function render(){
+    syncQuickFilterSelects();
+    var filtered = getFiltered();
+    renderSummary(filtered);
+    var rows = excludeCredits ? filtered.filter(function(r){ return !isCreditRow(r); }) : filtered;
+    if (rawMode) renderRawTable(rows);
+    else if (splitBySku && TIME_GROUPS[groupField]) renderPivotTable(rows);
+    else renderGroupedTable(rows);
+    renderLast10(rows);
+    renderPriceChangeTable(filtered); // price table always excludes credits internally regardless of toggle
+  }
+
+  function renderSummary(filtered){
+    var gross = 0, credit = 0;
+    filtered.forEach(function(r){ if (r.__amount>0) gross += r.__amount; else credit += r.__amount; });
+    var net = gross + credit;
+    var projects = {}; filtered.forEach(function(r){ if (r.Project) projects[r.Project]=1; });
+    var row = document.getElementById('summaryRow');
+    row.innerHTML = [
+      stat('Gross charges', fmtMoney(gross), 'green'),
+      stat('Credits', fmtMoney(credit), credit<0?'red':''),
+      stat('Net total', fmtMoney(net), ''),
+      stat('Line items shown', filtered.length.toLocaleString(), ''),
+      stat('Projects in view', Object.keys(projects).length, '')
+    ].join('');
+  }
+  function stat(label, value, cls){ return '<div class="stat"><div class="label">'+esc(label)+'</div><div class="value '+(cls||'')+'">'+value+'</div></div>'; }
+
+  function groupLabel(){ var g = GROUP_OPTIONS.filter(function(o){return o.key===groupField;})[0]; return g ? g.label : groupField; }
+
+  // ---- th() builder shared by raw + grouped tables; adds sort + optional column-filter button ----
+  function th(key, label, isNum, filterField){
+    var arrow = sortCol===key ? (sortDir===1?'\u2191':'\u2193') : '';
+    var filterBtn = filterField ? '<button class="th-filter-btn' + (activeFilters[filterField] ? ' active' : '') + '" data-filter-field="' + esc(filterField) + '" title="Filter ' + esc(filterField) + '">\u25BE</button>' : '';
+    return '<th class="'+(isNum?'num':'')+'" data-key="'+esc(key)+'"><span class="th-inner"><span class="sort-label">'+esc(label)+'</span> <span class="arrow">'+arrow+'</span></span>'+filterBtn+'</th>';
+  }
+  function attachSort(){
+    document.querySelectorAll('#tableHead th').forEach(function(elm){
+      var inner = elm.querySelector('.th-inner');
+      if (inner) inner.addEventListener('click', function(){
+        var key = elm.getAttribute('data-key');
+        if (sortCol===key) sortDir *= -1; else { sortCol=key; sortDir = -1; }
+        render();
+      });
+      var fbtn = elm.querySelector('.th-filter-btn');
+      if (fbtn) fbtn.addEventListener('click', function(ev){
+        ev.stopPropagation();
+        openFilterPanelAnchored(fbtn.getAttribute('data-filter-field'), fbtn);
+      });
+    });
+  }
+
+  function renderRawTable(filtered){
+    renderTrendChart(null);
+    var cols = COLUMNS.slice();
+    filtered = filtered.slice().sort(function(a,b){
+      var av = sortCol==='amount' ? a.__amount : sortCol==='Quantity' ? a.__qty : (a[sortCol]||'');
+      var bv = sortCol==='amount' ? b.__amount : sortCol==='Quantity' ? b.__qty : (b[sortCol]||'');
+      if (av<bv) return -1*sortDir; if (av>bv) return 1*sortDir; return 0;
+    });
+
+    var thead = document.getElementById('tableHead');
+    thead.innerHTML = cols.map(function(c){
+      var isNum = (c==='Quantity'||c==='Amount'||c==='Unit Price'||c==='Discount Percent');
+      var key = c==='Amount' ? 'amount' : c;
+      return th(key, c, isNum, c);
+    }).join('');
+    attachSort();
+
+    var totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    page = Math.min(page, totalPages-1);
+    var slice = filtered.slice(page*PAGE_SIZE, page*PAGE_SIZE+PAGE_SIZE);
+
+    var tbody = document.getElementById('tableBody');
+    if (!slice.length){
+      tbody.innerHTML = '';
+      document.getElementById('emptyNote').style.display = 'block';
+    } else {
+      document.getElementById('emptyNote').style.display = 'none';
+      tbody.innerHTML = slice.map(function(r){
+        return '<tr>' + cols.map(function(c){
+          if (c==='Quantity') return '<td class="num">'+fmtNum(r.__qty)+'</td>';
+          if (c==='Amount') return '<td class="num">'+fmtMoney(r.__amount)+'</td>';
+          if (c==='Unit Price') return '<td class="num">'+fmtNum(r.__unitPrice)+'</td>';
+          return '<td class="name">'+esc(r[c]||'')+'</td>';
+        }).join('') + '</tr>';
+      }).join('');
+    }
+    document.getElementById('tableFoot').innerHTML = '';
+
+    var pager = document.getElementById('pager');
+    pager.style.display = 'flex';
+    document.getElementById('pagerInfo').textContent =
+      'Rows ' + (filtered.length? (page*PAGE_SIZE+1) : 0) + '\u2013' + Math.min(filtered.length,(page+1)*PAGE_SIZE) + ' of ' + filtered.length.toLocaleString();
+    document.getElementById('prevPage').disabled = page<=0;
+    document.getElementById('nextPage').disabled = page>=totalPages-1;
+    document.getElementById('prevPage').onclick = function(){ page--; render(); };
+    document.getElementById('nextPage').onclick = function(){ page++; render(); };
+  }
+
+  function renderGroupedTable(filtered){
+    var groups = groupRows(filtered);
+    var isTime = !!TIME_GROUPS[groupField];
+    groups.sort(function(a,b){
+      var av = sortCol==='name' ? (isTime ? a.ts : a.name.toLowerCase()) : a[sortCol];
+      var bv = sortCol==='name' ? (isTime ? b.ts : b.name.toLowerCase()) : b[sortCol];
+      if (av<bv) return -1*sortDir; if (av>bv) return 1*sortDir; return 0;
+    });
+
+    renderTrendChart(isTime ? groups.slice().sort(function(a,b){ return a.ts-b.ts; }) : null);
+
+    var thead = document.getElementById('tableHead');
+    var filterField = (!isTime && COLUMNS.indexOf(groupField)!==-1) ? groupField : null;
+    thead.innerHTML = [
+      th('name', groupLabel(), false, filterField),
+      th('count', 'Rows', true),
+      th('qty', 'Total qty', true),
+      th('amount', 'Amount', true)
+    ].join('');
+    attachSort();
+
+    var maxAbs = Math.max.apply(null, groups.map(function(g){ return Math.abs(g.amount); }).concat([1]));
+    var tbody = document.getElementById('tableBody');
+    if (!groups.length){
+      tbody.innerHTML = '';
+      document.getElementById('emptyNote').style.display = 'block';
+    } else {
+      document.getElementById('emptyNote').style.display = 'none';
+      tbody.innerHTML = groups.map(function(g){
+        var pct = Math.min(100, Math.abs(g.amount)/maxAbs*100);
+        return '<tr>' +
+          '<td class="name">'+esc(g.name)+'</td>' +
+          '<td class="num">'+g.count.toLocaleString()+'</td>' +
+          '<td class="num">'+fmtNum(g.qty)+'</td>' +
+          '<td class="num bar-cell"><span class="bar-fill" style="width:'+pct+'%"></span><span style="position:relative;">'+fmtMoney(g.amount)+'</span></td>' +
+          '</tr>';
+      }).join('');
+    }
+
+    var totalAmount = groups.reduce(function(s,g){return s+g.amount;},0);
+    var totalQty = groups.reduce(function(s,g){return s+g.qty;},0);
+    var totalCount = groups.reduce(function(s,g){return s+g.count;},0);
+    document.getElementById('tableFoot').innerHTML = '<tr class="foot-total">' +
+      '<td>Total</td><td class="num">'+totalCount.toLocaleString()+'</td>' +
+      '<td class="num">'+fmtNum(totalQty)+'</td><td class="num">'+fmtMoney(totalAmount)+'</td></tr>';
+
+    document.getElementById('pager').style.display = 'none';
+  }
+
+  function timeBucketFor(r){
+    var d = r.__date;
+    if (!d) return {key:'(unknown date)', ts:-Infinity};
+    if (groupField === 'Daily') return {key:fmtDay(d), ts:d.getTime()};
+    var ws = weekStart(d);
+    return {key: weekLabel(ws), ts: ws.getTime()};
+  }
+
+  function renderPivotTable(filtered){
+    renderTrendChart(groupRows(filtered).sort(function(a,b){ return a.ts-b.ts; }));
+
+    var TOPN = 7;
+    var skuTotals = {};
+    filtered.forEach(function(r){ var s = (r.SKU||'').trim() || '(blank)'; skuTotals[s] = (skuTotals[s]||0) + r.__amount; });
+    var skuList = Object.keys(skuTotals).sort(function(a,b){ return Math.abs(skuTotals[b]) - Math.abs(skuTotals[a]); });
+    var topSkus = skuList.slice(0, TOPN);
+    var hasOther = skuList.length > TOPN;
+    var colKeys = topSkus.slice();
+    if (hasOther) colKeys.push('Other SKUs');
+
+    var pivot = {};
+    filtered.forEach(function(r){
+      var tb = timeBucketFor(r);
+      if (!pivot[tb.key]) pivot[tb.key] = {name:tb.key, ts:tb.ts, cols:{}, total:0};
+      var sku = (r.SKU||'').trim() || '(blank)';
+      var col = topSkus.indexOf(sku) !== -1 ? sku : 'Other SKUs';
+      pivot[tb.key].cols[col] = (pivot[tb.key].cols[col]||0) + r.__amount;
+      pivot[tb.key].total += r.__amount;
+    });
+    var rows = Object.keys(pivot).map(function(k){ return pivot[k]; }).sort(function(a,b){ return a.ts-b.ts; });
+
+    var thead = document.getElementById('tableHead');
+    thead.innerHTML = '<th>'+esc(groupLabel())+'</th>' +
+      colKeys.map(function(c){ return '<th class="num">'+esc(c)+'</th>'; }).join('') +
+      '<th class="num">Total</th>';
+
+    var tbody = document.getElementById('tableBody');
+    if (!rows.length){
+      tbody.innerHTML = '';
+      document.getElementById('emptyNote').style.display = 'block';
+    } else {
+      document.getElementById('emptyNote').style.display = 'none';
+      tbody.innerHTML = rows.map(function(r){
+        var cells = colKeys.map(function(c){
+          var v = r.cols[c] || 0;
+          return '<td class="num">' + (v ? fmtMoney(v) : '<span style="color:var(--ink-faint);">\u2013</span>') + '</td>';
+        }).join('');
+        return '<tr><td class="name">'+esc(r.name)+'</td>'+cells+'<td class="num">'+fmtMoney(r.total)+'</td></tr>';
+      }).join('');
+    }
+
+    var colTotals = {};
+    colKeys.forEach(function(c){ colTotals[c] = 0; });
+    rows.forEach(function(r){ colKeys.forEach(function(c){ colTotals[c] += (r.cols[c]||0); }); });
+    var grandTotal = rows.reduce(function(s,r){ return s+r.total; }, 0);
+    document.getElementById('tableFoot').innerHTML = '<tr class="foot-total"><td>Total</td>' +
+      colKeys.map(function(c){ return '<td class="num">'+fmtMoney(colTotals[c])+'</td>'; }).join('') +
+      '<td class="num">'+fmtMoney(grandTotal)+'</td></tr>';
+
+    document.getElementById('pager').style.display = 'none';
+    lastPivot = {rows: rows, colKeys: colKeys, bucketLabel: groupLabel()};
+  }
+
+  function renderTrendChart(chronoGroups){
+    var elm = document.getElementById('trendChart');
+    if (!chronoGroups || chronoGroups.length < 2){ elm.style.display = 'none'; elm.innerHTML = ''; return; }
+    elm.style.display = 'block';
+    var w = Math.max(elm.clientWidth || 900, 300);
+    var h = 150;
+    var padL = 4, padR = 4, padTop = 10, padBottom = 22;
+    var plotW = w - padL - padR;
+    var plotH = h - padTop - padBottom;
+    var n = chronoGroups.length;
+    var gap = n > 40 ? 1 : 3;
+    var barW = Math.max(1, (plotW / n) - gap);
+    var maxAbs = Math.max.apply(null, chronoGroups.map(function(g){ return Math.abs(g.amount); }).concat([1]));
+    var zeroY = padTop + plotH;
+    var everyLabel = Math.ceil(n / (w > 700 ? 14 : 7));
+    var bars = chronoGroups.map(function(g, i){
+      var x = padL + i * (plotW / n);
+      var barH = Math.max(1, Math.abs(g.amount) / maxAbs * plotH);
+      var y = zeroY - barH;
+      var cls = g.amount < 0 ? 'bar neg' : 'bar';
+      var title = esc(g.name) + ': ' + fmtMoney(g.amount);
+      var label = (i % everyLabel === 0) ? '<text x="'+(x+barW/2)+'" y="'+(h-6)+'" font-size="9.5" text-anchor="middle">'+esc(g.name.split(',')[0].split('\u2013')[0])+'</text>' : '';
+      return '<rect class="'+cls+'" x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+barW.toFixed(1)+'" height="'+barH.toFixed(1)+'"><title>'+title+'</title></rect>' + label;
+    }).join('');
+    elm.innerHTML = '<svg viewBox="0 0 '+w+' '+h+'" width="100%" height="'+h+'" preserveAspectRatio="none" style="display:block;">' +
+      '<line class="axis-line" x1="'+padL+'" y1="'+zeroY+'" x2="'+(w-padR)+'" y2="'+zeroY+'"></line>' + bars + '</svg>';
+  }
+
+  // ================= Last 10 days usage-date chart =================
+  function renderLast10(rows){
+    var creditFree = rows.filter(function(r){ return !isCreditRow(r); }).filter(function(r){ return r.__date; });
+    var listEl = document.getElementById('last10List');
+    if (!creditFree.length){
+      listEl.innerHTML = '<div class="d">No dated rows in the current view</div>';
+      if (last10Chart){ last10Chart.destroy(); last10Chart = null; }
+      return;
+    }
+    var maxDate = creditFree.reduce(function(m,r){ return (!m || r.__date > m) ? r.__date : m; }, null);
+    var endDay = new Date(maxDate.getFullYear(), maxDate.getMonth(), maxDate.getDate());
+    var days = [];
+    for (var i=9;i>=0;i--){ var d = new Date(endDay); d.setDate(endDay.getDate()-i); days.push(d); }
+    var perDay = days.map(function(d, idx){
+      var start = d.getTime(), end = d.getTime() + 24*3600*1000 - 1;
+      var total = creditFree.filter(function(r){ var t=r.__date.getTime(); return t>=start && t<=end; }).reduce(function(s,r){ return s+r.__amount; }, 0);
+      return { date: d, total: total, incomplete: idx >= days.length-2 };
+    });
+    listEl.innerHTML = perDay.map(function(p){
+      return '<div class="d' + (p.incomplete?' incomplete':'') + '"><span>' + fmtDate(p.date) + (p.incomplete?' <span class="warn-badge">Incomplete</span>':'') + '</span><span class="amt">'+fmtMoney(p.total)+'</span></div>';
+    }).join('');
+
+    var labels = perDay.map(function(p){ return fmtDate(p.date); });
+    var data = perDay.map(function(p){ return Number(p.total.toFixed(2)); });
+    var bg = perDay.map(function(p){ return p.incomplete ? 'rgba(138,97,22,0.55)' : 'rgba(12,91,65,0.75)'; });
+    var border = perDay.map(function(p){ return p.incomplete ? 'rgba(138,97,22,1)' : 'rgba(12,91,65,1)'; });
+    var ctx = document.getElementById('last10Chart').getContext('2d');
+    if (last10Chart){
+      last10Chart.data.labels = labels;
+      last10Chart.data.datasets[0].data = data;
+      last10Chart.data.datasets[0].backgroundColor = bg;
+      last10Chart.data.datasets[0].borderColor = border;
+      last10Chart.update();
+    } else {
+      last10Chart = new Chart(ctx, {
+        type: 'bar',
+        data: { labels: labels, datasets: [{ label:'Amount', data: data, backgroundColor: bg, borderColor: border, borderWidth: 1 }] },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          scales: { x: { ticks: { maxRotation: 45, minRotation: 30 } }, y: { beginAtZero: true } },
+          plugins: { legend: { display: false }, tooltip: { callbacks: { label: function(c){ return 'Amount: ' + Number(c.raw).toFixed(2); } } } }
+        }
+      });
+    }
+  }
+
+  // ================= Amount changes by SKU (day over day) =================
+  function populatePricePickers(){
+    var pp = document.getElementById('priceProjectPicker');
+    var cp = document.getElementById('priceClusterPicker');
+    var prevP = pp.value, prevC = cp.value;
+    pp.innerHTML = '<option value="">All projects</option>';
+    uniqueFieldValues('Project').forEach(function(p){ var o=document.createElement('option'); o.value=p; o.textContent=p; pp.appendChild(o); });
+    try{ pp.value = prevP; }catch(e){}
+    cp.innerHTML = '<option value="">All clusters</option>';
+    uniqueFieldValues('Cluster').forEach(function(c){ var o=document.createElement('option'); o.value=c; o.textContent=c; cp.appendChild(o); });
+    try{ cp.value = prevC; }catch(e){}
+  }
+  document.getElementById('priceProjectPicker').addEventListener('change', render);
+  document.getElementById('priceClusterPicker').addEventListener('change', render);
+  document.getElementById('refreshPriceChanges').addEventListener('click', render);
+  document.getElementById('minPct').addEventListener('change', render);
+
+  function computeAmountChanges(filtered){
+    var rows = filtered.filter(function(r){ return !isCreditRow(r) && r.__date; });
+    var proj = document.getElementById('priceProjectPicker').value;
+    var clus = document.getElementById('priceClusterPicker').value;
+    if (proj) rows = rows.filter(function(r){ return (r.Project||'') === proj; });
+    if (clus) rows = rows.filter(function(r){ return (r.Cluster||'') === clus; });
+    var groups = {};
+    rows.forEach(function(r){
+      var sku = r.SKU || '(blank)';
+      var project = r.Project || '(blank)';
+      var cluster = r.Cluster || '(blank)';
+      var ud = fmtDate(r.__date);
+      var gk = project + '|' + cluster + '|' + sku;
+      groups[gk] = groups[gk] || {};
+      groups[gk][ud] = groups[gk][ud] || 0;
+      groups[gk][ud] += r.__amount;
+    });
+    var changes = [];
+    Object.keys(groups).forEach(function(gk){
+      var parts = gk.split('|'); var project = parts[0], cluster = parts[1], sku = parts.slice(2).join('|');
+      var dateKeys = Object.keys(groups[gk]).sort();
+      if (dateKeys.length < 2) return;
+      for (var i=1;i<dateKeys.length;i++){
+        var prevAmount = groups[gk][dateKeys[i-1]], curAmount = groups[gk][dateKeys[i]];
+        var delta = curAmount - prevAmount;
+        var pct = prevAmount === 0 ? (delta === 0 ? 0 : 100) : (delta / Math.abs(prevAmount) * 100);
+        changes.push({ date: dateKeys[i], project: project, cluster: cluster, sku: sku, amount: curAmount, prevAmount: prevAmount, delta: delta, pct: pct });
+      }
+    });
+    return changes;
+  }
+
+  function renderPriceChangeTable(filtered){
+    var minPct = parseFloat(document.getElementById('minPct').value || '0');
+    var changes = computeAmountChanges(filtered);
+    if (!isNaN(minPct) && Math.abs(minPct) > 0) changes = changes.filter(function(c){ return Math.abs(c.pct) >= Math.abs(minPct); });
+    changes.sort(function(a,b){
+      var av = a[priceSortKey], bv = b[priceSortKey];
+      if (typeof av === 'string') { if(av<bv) return -1*priceSortDir; if(av>bv) return 1*priceSortDir; return 0; }
+      return (av-bv) * priceSortDir;
+    });
+    var tbody = document.getElementById('priceChangeBody');
+    tbody.innerHTML = '';
+    var totalDelta = 0;
+    if (!changes.length){
+      document.getElementById('priceEmptyNote').style.display = 'block';
+    } else {
+      document.getElementById('priceEmptyNote').style.display = 'none';
+      changes.slice(0, 500).forEach(function(c){
+        totalDelta += c.delta;
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td>'+esc(c.date)+'</td><td>'+esc(c.project)+'</td><td>'+esc(c.cluster)+'</td><td>'+esc(c.sku)+'</td>' +
+          '<td class="num">'+fmtMoney(c.amount)+'</td><td class="num">'+fmtMoney(c.prevAmount)+'</td>' +
+          '<td class="num '+(c.delta>0?'price-up':c.delta<0?'price-down':'')+'">'+fmtMoney(c.delta)+'</td>' +
+          '<td class="num '+(c.pct>0?'price-up':c.pct<0?'price-down':'')+'">'+c.pct.toFixed(2)+'%</td>';
+        tbody.appendChild(tr);
+      });
+    }
+    document.getElementById('priceChangeCount').textContent = changes.length.toLocaleString();
+    document.getElementById('priceChangeTotalDelta').textContent = changes.reduce(function(s,c){return s+c.delta;},0).toFixed(2);
+
+    document.querySelectorAll('#priceChangeTable thead th').forEach(function(elm){
+      elm.onclick = function(){
+        var key = elm.getAttribute('data-key');
+        if (priceSortKey === key) priceSortDir *= -1; else { priceSortKey = key; priceSortDir = -1; }
+        renderPriceChangeTable(filtered);
+      };
+    });
+  }
+
+  // ================= Export: CSV =================
+  function csvEscape(v){ v = String(v); if (/[",\n]/.test(v)) v = '"' + v.replace(/"/g,'""') + '"'; return v; }
+
+  document.getElementById('exportBtn').addEventListener('click', function(){
+    var filtered = getFiltered();
+    filtered = excludeCredits ? filtered.filter(function(r){ return !isCreditRow(r); }) : filtered;
+    var csvRows, headerLine, filenamePart;
+    if (rawMode){
+      var cols = COLUMNS.slice();
+      headerLine = cols.map(csvEscape).join(',');
+      csvRows = filtered.map(function(r){
+        return cols.map(function(c){
+          var v = c==='Quantity'? r.__qty : c==='Amount'? r.__amount : c==='Unit Price' ? r.__unitPrice : (r[c]||'');
+          return csvEscape(v);
+        }).join(',');
+      });
+      filenamePart = 'rows';
+    } else if (splitBySku && TIME_GROUPS[groupField] && lastPivot){
+      var pv = lastPivot;
+      headerLine = [pv.bucketLabel].concat(pv.colKeys, ['Total']).map(csvEscape).join(',');
+      csvRows = pv.rows.map(function(r){
+        var line = [csvEscape(r.name)];
+        pv.colKeys.forEach(function(c){ line.push(r.cols[c]||0); });
+        line.push(r.total);
+        return line.join(',');
+      });
+      filenamePart = groupField.toLowerCase() + '-by-sku';
+    } else {
+      var groups = groupRows(filtered);
+      groups.sort(function(a,b){ return b.amount - a.amount; });
+      headerLine = [groupLabel(), 'Rows', 'Total Qty', 'Amount'].join(',');
+      csvRows = groups.map(function(g){ return [csvEscape(g.name), g.count, g.qty, g.amount].join(','); });
+      filenamePart = groupField.toLowerCase().replace(/\s+/g,'-');
+    }
+    var blob = new Blob([headerLine + '\n' + csvRows.join('\n')], {type:'text/csv'});
+    downloadBlob(blob, 'atlas-invoice-' + filenamePart + '.csv');
+    log('Exported CSV: ' + filenamePart);
+  });
+
+  // ================= Export: XLSX (filtered raw rows) =================
+  document.getElementById('exportXlsxBtn').addEventListener('click', function(){
+    var filtered = getFiltered();
+    filtered = excludeCredits ? filtered.filter(function(r){ return !isCreditRow(r); }) : filtered;
+    if (!filtered.length){ log('Nothing to export — no rows match current filters'); return; }
+    var cols = COLUMNS.slice();
+    var aoa = [cols];
+    filtered.forEach(function(r){
+      aoa.push(cols.map(function(c){
+        if (c==='Quantity') return r.__qty;
+        if (c==='Amount') return r.__amount;
+        if (c==='Unit Price') return r.__unitPrice;
+        return r[c]===undefined ? '' : r[c];
+      }));
+    });
+    var ws = XLSX.utils.aoa_to_sheet(aoa);
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Filtered rows');
+    var wbout = XLSX.write(wb, { bookType:'xlsx', type:'array' });
+    downloadBlob(new Blob([wbout], {type:'application/octet-stream'}), 'atlas-invoice-filtered.xlsx');
+    log('Exported XLSX — rows: ' + filtered.length);
+  });
+
+  function downloadBlob(blob, filename){
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // ================= Snapshot (JPEG) =================
+  document.getElementById('snapshotBtn').addEventListener('click', function(){
+    var btn = this;
+    var target = document.querySelector('.wrap');
+    var prevText = btn.textContent;
+    btn.textContent = 'Capturing…';
+    btn.disabled = true;
+    var bg = getComputedStyle(document.body).backgroundColor;
+    html2canvas(target, { backgroundColor: bg, scale: 2, useCORS: true }).then(function(canvas){
+      var jc = document.createElement('canvas'); jc.width = canvas.width; jc.height = canvas.height;
+      var ctx = jc.getContext('2d'); ctx.fillStyle = bg; ctx.fillRect(0,0,jc.width,jc.height); ctx.drawImage(canvas,0,0);
+      var dataUrl = jc.toDataURL('image/jpeg', 0.92);
+      var orgNames = uniqueNonEmpty(FILES_META.map(function(f){return f.orgName;}));
+      var org = (orgNames[0] || 'atlas-invoice').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
+      var a2 = document.createElement('a'); a2.href = dataUrl; a2.download = (org || 'atlas-invoice') + '-snapshot.jpg';
+      document.body.appendChild(a2); a2.click(); document.body.removeChild(a2);
+      log('Saved JPEG snapshot');
+    }).catch(function(err){
+      showError('Could not create the image snapshot: ' + err.message);
+    }).finally(function(){
+      btn.textContent = prevText; btn.disabled = false;
+    });
+  });
+
+})();
+</script>
+</body>
+</html>
