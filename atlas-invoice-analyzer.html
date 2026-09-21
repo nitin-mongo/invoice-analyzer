@@ -248,7 +248,9 @@
   }
   .filter-panel h4 { margin: 0 0 8px; font-size: 12.5px; }
   .filter-panel .search-input { margin-bottom: 8px; }
-  .filter-panel .sort-actions, .filter-panel .actions-bar { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  .filter-panel .sort-actions, .filter-panel .actions-bar { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  .filter-panel .sort-actions { border-bottom: 1px solid var(--rule); padding-bottom: 8px; }
+  .filter-panel .actions-bar { justify-content: space-between; }
   .values-list { max-height: 200px; overflow: auto; border: 1px solid var(--rule); padding: 4px; border-radius: var(--radius); background: var(--paper); }
   .value-row { display: flex; align-items: center; gap: 6px; padding: 3px 2px; }
   .value-row input { width: auto; }
@@ -828,16 +830,17 @@
     panel.appendChild(search);
 
     var sortBar = document.createElement('div'); sortBar.className='sort-actions';
-    var sortAZ = document.createElement('button'); sortAZ.className='btn sm ghost'; sortAZ.textContent='A\u2192Z';
-    var sortZA = document.createElement('button'); sortZA.className='btn sm ghost'; sortZA.textContent='Z\u2192A';
+    var sortAZ = document.createElement('button'); sortAZ.className='btn sm ghost'; sortAZ.textContent='Sort A\u2192Z';
+    var sortZA = document.createElement('button'); sortZA.className='btn sm ghost'; sortZA.textContent='Sort Z\u2192A';
     sortBar.appendChild(sortAZ); sortBar.appendChild(sortZA); panel.appendChild(sortBar);
 
     var actionsBar = document.createElement('div'); actionsBar.className='actions-bar';
     var selectAllBtn = document.createElement('button'); selectAllBtn.className='btn sm ghost'; selectAllBtn.textContent='Select all';
     var clearAllBtn = document.createElement('button'); clearAllBtn.className='btn sm ghost'; clearAllBtn.textContent='Clear';
     var presentBtn = document.createElement('button'); presentBtn.className='btn sm ghost'; presentBtn.textContent='Show only present';
-    actionsBar.appendChild(selectAllBtn); actionsBar.appendChild(clearAllBtn); panel.appendChild(actionsBar);
-    actionsBar.appendChild(presentBtn);
+    var selectionActions = document.createElement('div'); selectionActions.className='actions-bar';
+    selectionActions.appendChild(selectAllBtn); selectionActions.appendChild(presentBtn); selectionActions.appendChild(clearAllBtn);
+    panel.appendChild(selectionActions);
 
     var valuesWrap = document.createElement('div'); valuesWrap.className='values-list'; panel.appendChild(valuesWrap);
 
