@@ -1,52 +1,46 @@
+---
 kind: pipeline
 type: kubernetes
 name: default
 
 platform:
-  os: linux
   arch: arm64
 
 trigger:
   branch:
-    - main
-  event:
-    - push
+  - main
 
 steps:
-  - name: build-and-push
-    image: gcr.io/kaniko-project/executor:v1.23.2-debug
-    environment:
-      AWS_ACCESS_KEY_ID:
-        from_secret: ecr_access_key
-      AWS_SECRET_ACCESS_KEY:
-        from_secret: ecr_secret_key
-    commands:
-      - mkdir -p /kaniko/.docker
-      - printf '{"credsStore":"ecr-login"}' > /kaniko/.docker/config.json
-      - >-
-        /kaniko/executor
-        --context=.
-        --dockerfile=Dockerfile
-        --destination=795250896452.dkr.ecr.us-east-1.amazonaws.com/sa-demo/atlas-invoice-analyzer:${DRONE_COMMIT_SHA}
-        --destination=795250896452.dkr.ecr.us-east-1.amazonaws.com/sa-demo/atlas-invoice-analyzer:latest
-        --snapshot-mode=redo
+- name: publish
+  image: plugins/kaniko-ecr
+  settings:
+    create_repository: true
+    registry: 795250896452.dkr.ecr.us-east-1.amazonaws.com
+    repo: sa-demo/${DRONE_REPO_NAME}
+    tags:
+    - git-${DRONE_COMMIT_SHA:0:7}
+    - latest
+    access_key:
+      from_secret: ecr_access_key
+    secret_key:
+      from_secret: ecr_secret_key
+  when:
+    event:
+    - push
 
-  - name: deploy-staging
-    image: alpine/helm:3.15.4
-    environment:
-      STAGING_KUBERNETES_TOKEN:
-        from_secret: staging_kubernetes_token
-    commands:
-      - test -n "$STAGING_KUBERNETES_TOKEN"
-      - helm repo add mongodb https://10gen.github.io/helm-charts
-      - helm repo update mongodb
-      - >-
-        helm upgrade --install atlas-invoice-analyzer mongodb/web-app
-        --version 4.37.1
-        --namespace sa-demo
-        --create-namespace
-        --values environments/staging.yaml
-        --set image.tag=${DRONE_COMMIT_SHA}
-        --set-string kubernetesToken=$STAGING_KUBERNETES_TOKEN
-        --wait
-        --timeout 10m
+- name: deploy-staging
+  image: public.ecr.aws/kanopy/drone-helm:v3
+  settings:
+    chart: mongodb/web-app
+    chart_version: 4.37.1
+    add_repos: ["mongodb=https://10gen.github.io/helm-charts"]
+    namespace: sa-demo
+    release: atlas-invoice-analyzer
+    values: image.tag=git-${DRONE_COMMIT_SHA:0:7},image.repository=795250896452.dkr.ecr.us-east-1.amazonaws.com/sa-demo/${DRONE_REPO_NAME}
+    values_files: [ "environments/staging.yaml" ]
+    api_server: https://api.staging.corp.mongodb.com
+    kubernetes_token:
+      from_secret: staging_kubernetes_token
+  when:
+    event:
+    - push
