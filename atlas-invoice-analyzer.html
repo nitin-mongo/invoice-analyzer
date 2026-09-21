@@ -1118,11 +1118,13 @@
         }).join('') + '</tr>';
       }).join('');
     }
+    var totalUnitPrice = filtered.reduce(function(sum, r){ return sum + r.__unitPrice; }, 0);
     var totalQty = filtered.reduce(function(sum, r){ return sum + r.__qty; }, 0);
     var totalAmount = filtered.reduce(function(sum, r){ return sum + r.__amount; }, 0);
     document.getElementById('tableFoot').innerHTML = '<tr class="foot-total">' + cols.map(function(c){
+      if (c === 'Unit Price') return '<td class="num">' + fmtNum(totalUnitPrice) + '</td>';
       if (c === 'Quantity') return '<td class="num">' + fmtNum(totalQty) + '</td>';
-      if (c === 'Amount') return '<td class="num">' + fmtMoney(totalAmount) + '</td>';
+      if (c === 'Amount') return '<td class="num">' + fmtNum(totalAmount) + '</td>';
       return '<td></td>';
     }).join('') + '</tr>';
 
