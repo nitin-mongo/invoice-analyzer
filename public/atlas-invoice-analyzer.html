@@ -727,7 +727,6 @@
     var grid = document.getElementById('filtersGrid');
     var html = '';
     FILTER_FIELDS.forEach(function(field){
-      if (COLUMNS.indexOf(field) === -1) return;
       var opts = uniqueFieldValues(field);
       html += '<div class="field"><label>' + esc(field) + '</label><select data-field="' + esc(field) + '">';
       html += '<option value="">All (' + opts.length + ')</option>';
